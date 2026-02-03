@@ -85,12 +85,15 @@ def _split_long_message(text: str, max_len: int = TELEGRAM_MESSAGE_MAX_LENGTH) -
 
 
 def _log_user_message(username: str, text: str) -> None:
-    """Пишет в лог чата строку user: username text: \"...\" (только в файл, не в Telegram)."""
+    """Пишет в лог чата строку user: username text: \"...\" (только в файл, не в Telegram). Каждое сообщение — с новой строки, буфер сбрасывается сразу."""
     chat_logger = logging.getLogger("bot.chat")
     if not chat_logger.handlers:
         return
     escaped = (text or "").replace("\\", "\\\\").replace('"', '\\"')
     chat_logger.info('user: %s text: "%s"', username, escaped)
+    for h in chat_logger.handlers:
+        if hasattr(h, "flush"):
+            h.flush()
 
 
 @router.message(F.text)

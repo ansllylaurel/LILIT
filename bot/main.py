@@ -24,7 +24,7 @@ if CHAT_LOG_FILE:
     _chat_log.setLevel(logging.INFO)
     _chat_log.propagate = False
     try:
-        _fh = logging.FileHandler(CHAT_LOG_FILE, encoding="utf-8")
+        _fh = logging.FileHandler(CHAT_LOG_FILE, encoding="utf-8", mode="a")
         _fh.setFormatter(logging.Formatter("%(message)s"))
         _chat_log.addHandler(_fh)
     except OSError:
