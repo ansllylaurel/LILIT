@@ -84,12 +84,25 @@ def _split_long_message(text: str, max_len: int = TELEGRAM_MESSAGE_MAX_LENGTH) -
     return chunks
 
 
+def _log_user_message(username: str, text: str) -> None:
+    """Пишет в лог чата строку user: username text: \"...\" (только в файл, не в Telegram)."""
+    chat_logger = logging.getLogger("bot.chat")
+    if not chat_logger.handlers:
+        return
+    escaped = (text or "").replace("\\", "\\\\").replace('"', '\\"')
+    chat_logger.info('user: %s text: "%s"', username, escaped)
+
+
 @router.message(F.text)
 async def handle_text(message: Message) -> None:
     """Обработка текстового сообщения: контекст + нейросеть → ответ пользователю."""
     user_text = (message.text or "").strip()
     if not user_text:
         return
+    username = message.from_user.username if message.from_user else None
+    user_label = (username or f"id_{message.from_user.id}") if message.from_user else "unknown"
+    _log_user_message(user_label, user_text)
+
     chat_id = message.chat.id
     role = get_role(chat_id)
     history = get_history(chat_id)

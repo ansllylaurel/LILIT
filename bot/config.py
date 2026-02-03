@@ -29,6 +29,9 @@ DEEPSEEK_TIMEOUT: float = 60.0
 # Модель (DeepSeek: deepseek-chat, StepFun: step-1-8k и др.)
 DEEPSEEK_MODEL: str = os.getenv("LLM_MODEL", os.getenv("DEEPSEEK_MODEL", "deepseek-chat")).strip()
 
+# Файл для логирования входящих сообщений (user + text). Пусто — не логировать в файл.
+CHAT_LOG_FILE: str = os.getenv("CHAT_LOG_FILE", "chat.log").strip()
+
 
 def validate_config() -> None:
     """Проверяет наличие обязательных переменных. Вызывает SystemExit при ошибке."""
