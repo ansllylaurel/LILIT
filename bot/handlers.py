@@ -4,9 +4,16 @@ Telegram-хендлеры: команды и обработка текстовы
 import logging
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import LabeledPrice, Message, PreCheckoutQuery
 
-from bot.config import TELEGRAM_MESSAGE_MAX_LENGTH
+from bot.balance import add_credits, deduct_credits, get_balance
+from bot.config import (
+    CREDITS_PER_MESSAGE,
+    FREE_CREDITS_FOR_NEW_USER,
+    TELEGRAM_MESSAGE_MAX_LENGTH,
+    TOPUP_CREDITS,
+    TOPUP_STARS_AMOUNT,
+)
 from bot.deepseek_client import chat_completion
 from bot.memory import (
     DEFAULT_ROLE,
@@ -24,13 +31,22 @@ router = Router(name="chat")
 @router.message(Command("start"))
 async def cmd_start(message: Message) -> None:
     """Приветствие и описание бота."""
+    user_id = message.from_user.id if message.from_user else 0
+    if user_id and FREE_CREDITS_FOR_NEW_USER > 0 and get_balance(user_id) == 0:
+        add_credits(user_id, FREE_CREDITS_FOR_NEW_USER)
+        free_msg = f" В подарок начислено {FREE_CREDITS_FOR_NEW_USER} кредитов.\n\n"
+    else:
+        free_msg = "\n\n"
     text = (
-        "Привет! Я Лилит — бот с нейросетью.\n\n"
-        "Команды:\n"
+        "Привет! Я Лилит — бот с нейросетью."
+        + free_msg
+        + "Команды:\n"
+        "/balance — баланс кредитов\n"
+        "/topup — пополнить кредиты (оплата в Telegram)\n"
         "/setrole <текст> — задать роль (например: Ты архитектор)\n"
         "/role — показать текущую роль\n"
         "/reset — очистить историю диалога\n\n"
-        "Просто напиши сообщение — отвечу с учётом контекста и роли."
+        "Напиши сообщение — отвечу с учётом контекста и роли (списывается 1 кредит)."
     )
     await message.answer(text)
 
@@ -64,6 +80,49 @@ async def cmd_reset(message: Message) -> None:
     """Очистить контекст диалога и сбросить роль."""
     clear_all(message.chat.id)
     await message.answer("История диалога и роль очищены. Можешь начать заново.")
+
+
+@router.message(Command("balance"))
+async def cmd_balance(message: Message) -> None:
+    """Показать баланс кредитов."""
+    user_id = message.from_user.id if message.from_user else 0
+    balance = get_balance(user_id)
+    await message.answer(f"На твоём счёте: {balance} кредитов. Один ответ нейросети = {CREDITS_PER_MESSAGE} кредит. Пополнить: /topup")
+
+
+@router.message(Command("topup"))
+async def cmd_topup(message: Message) -> None:
+    """Отправить счёт на пополнение (Telegram Stars)."""
+    if TOPUP_STARS_AMOUNT <= 0:
+        await message.answer(
+            "Пополнение в боте отключено. Обратись к администратору бота."
+        )
+        return
+    await message.answer_invoice(
+        title="Кредиты Лилит",
+        description=f"{TOPUP_CREDITS} кредитов для запросов к нейросети. Оплата через Telegram (звёзды).",
+        payload="lilit_topup",
+        currency="XTR",
+        prices=[LabeledPrice(label=f"{TOPUP_CREDITS} кредитов", amount=TOPUP_STARS_AMOUNT)],
+    )
+
+
+@router.pre_checkout_query(F.invoice_payload == "lilit_topup")
+async def pre_checkout(query: PreCheckoutQuery) -> None:
+    """Подтверждаем приём оплаты."""
+    await query.answer(ok=True)
+
+
+@router.message(F.successful_payment)
+async def successful_payment(message: Message) -> None:
+    """Начисляем кредиты после успешной оплаты."""
+    if message.successful_payment.invoice_payload != "lilit_topup":
+        return
+    user_id = message.from_user.id if message.from_user else 0
+    if not user_id:
+        return
+    new_balance = add_credits(user_id, TOPUP_CREDITS)
+    await message.answer(f"Спасибо! Начислено {TOPUP_CREDITS} кредитов. Баланс: {new_balance}. Можешь писать боту.")
 
 
 def _split_long_message(text: str, max_len: int = TELEGRAM_MESSAGE_MAX_LENGTH) -> list[str]:
@@ -102,6 +161,13 @@ async def handle_text(message: Message) -> None:
     user_text = (message.text or "").strip()
     if not user_text:
         return
+    user_id = message.from_user.id if message.from_user else 0
+    if get_balance(user_id) < CREDITS_PER_MESSAGE:
+        await message.answer(
+            f"Недостаточно кредитов (нужно {CREDITS_PER_MESSAGE}). Пополните баланс: /topup"
+        )
+        return
+
     username = message.from_user.username if message.from_user else None
     user_label = (username or f"id_{message.from_user.id}") if message.from_user else "unknown"
     _log_user_message(user_label, user_text)
@@ -128,6 +194,7 @@ async def handle_text(message: Message) -> None:
         )
         return
 
+    deduct_credits(user_id, CREDITS_PER_MESSAGE)
     add_message(chat_id, "user", user_text)
     add_message(chat_id, "assistant", reply)
 

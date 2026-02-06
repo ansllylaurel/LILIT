@@ -32,6 +32,16 @@ DEEPSEEK_MODEL: str = os.getenv("LLM_MODEL", os.getenv("DEEPSEEK_MODEL", "deepse
 # Файл для логирования входящих сообщений (user + text). Пусто — не логировать в файл.
 CHAT_LOG_FILE: str = os.getenv("CHAT_LOG_FILE", "chat.log").strip()
 
+# --- Оплата (Telegram Stars): кредиты за сообщения, пополнение за звёзды ---
+# Сколько кредитов списывать за один запрос к нейросети
+CREDITS_PER_MESSAGE: int = int(os.getenv("CREDITS_PER_MESSAGE", "1").strip() or "1")
+# Сколько кредитов начислять за одну покупку (пакет пополнения)
+TOPUP_CREDITS: int = int(os.getenv("TOPUP_CREDITS", "10").strip() or "10")
+# Цена пакета пополнения в Telegram Stars (XTR). 0 — отключить оплату в боте
+TOPUP_STARS_AMOUNT: int = int(os.getenv("TOPUP_STARS_AMOUNT", "50").strip() or "0")
+# Кредитов новому пользователю при первом /start (0 — не давать)
+FREE_CREDITS_FOR_NEW_USER: int = int(os.getenv("FREE_CREDITS_FOR_NEW_USER", "0").strip() or "0")
+
 
 def validate_config() -> None:
     """Проверяет наличие обязательных переменных. Вызывает SystemExit при ошибке."""
